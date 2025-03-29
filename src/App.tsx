@@ -110,32 +110,71 @@ function App() {
     }
   }, []); // Run only once on mount to prevent code reuse
 
-const getToken = async (code: string) => {
-  try {
-    console.log('Sending token exchange request with:', { code, redirectUri });
-    const response = await axios.post('/api/token', { code, redirectUri });
-    setToken(response.data.access_token);
-    setIsLoggedIn(true);
-    setStatus({ type: 'success', message: 'Successfully authenticated with Spotify' });
-    window.history.pushState({}, document.title, '/'); // Clean URL
-  } catch (err: any) {
-    const errorMessage = err.response?.data?.error || 'Failed to authenticate with Spotify';
-    const errorDetails = err.response?.data?.details || err.message;
-    // Check for invalid_grant error (expired or invalid code)
-    if (errorDetails?.error === 'invalid_grant') {
-      setStatus({
-        type: 'error',
-        message: 'Authentication code expired or invalid. Please log in again.',
-      });
-      setIsLoggedIn(false); // Force re-authentication
-    } else {
+  const getToken = async (code: string) => {
+    try {
+      console.log('Sending token exchange request with:', { code, redirectUri });
+      const response = await axios.post('/api/token', { code, redirectUri });
+      setToken(response.data.access_token);
+      setIsLoggedIn(true);
+      setStatus({ type: 'success', message: 'Successfully authenticated with Spotify' });
+      window.history.pushState({}, document.title, '/'); // Clean URL
+    } catch (err: any) {
+      const errorMessage = err.response?.data?.error || 'Failed to authenticate with Spotify';
+      const errorDetails = err.response?.data?.details || err.message;
       setStatus({ type: 'error', message: `${errorMessage}: ${errorDetails}` });
+      console.error('Token exchange error:', err);
     }
-    console.error('Token exchange error:', err);
-  }
-};
+  };
 
   // Fetch playlist tracks from Spotify
+  // const handleFetchPlaylist = async () => {
+  //   if (!playlistUrl.trim()) {
+  //     setStatus({ type: 'error', message: 'Please enter a valid Spotify playlist URL' });
+  //     return;
+  //   }
+  //   if (!token) {
+  //     setStatus({ type: 'error', message: 'Please log in first' });
+  //     return;
+  //   }
+
+  //   setIsLoading(true);
+  //   setStatus({ type: '', message: '' });
+
+  //   const playlistId = playlistUrl.split('/').pop()?.split('?')[0];
+  //   let allTracks: Track[] = [];
+  //   let nextUrl: string | null = `https://api.spotify.com/v1/playlists/${playlistId}/tracks`;
+
+  //   try {
+  //     while (nextUrl) {
+  //       const response = await axios.get(nextUrl, {
+  //         headers: { Authorization: `Bearer ${token}` },
+  //       });
+
+  //       const fetchedTracks = response.data.items.map((item: any, index: number) => ({
+  //         id: allTracks.length + index + 1,
+  //         name: item.track.name,
+  //         artist: item.track.artists[0].name,
+  //         album: item.track.album.name,
+  //         albumArt: item.track.album.images[0]?.url || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=150&h=150&q=80',
+  //         duration: `${Math.floor(item.track.duration_ms / 60000)}:${((item.track.duration_ms % 60000) / 1000).toFixed(0).padStart(2, '0')}`,
+  //         downloading: false,
+  //       }));
+
+  //       allTracks = [...allTracks, ...fetchedTracks];
+  //       nextUrl = response.data.next;
+  //     }
+
+  //     setTracks(allTracks);
+  //     setStatus({ type: 'success', message: `Successfully fetched ${allTracks.length} tracks` });
+  //   } catch (err: any) {
+  //     const errorMessage = err.response?.data?.error?.message || 'Failed to fetch playlist. Check URL or try again.';
+  //     setStatus({ type: 'error', message: errorMessage });
+  //     console.error('Fetch playlist error:', err);
+  //   } finally {
+  //     setIsLoading(false);
+  //   }
+  // };
+
   const handleFetchPlaylist = async () => {
     if (!playlistUrl.trim()) {
       setStatus({ type: 'error', message: 'Please enter a valid Spotify playlist URL' });
@@ -145,28 +184,36 @@ const getToken = async (code: string) => {
       setStatus({ type: 'error', message: 'Please log in first' });
       return;
     }
-
+  
     setIsLoading(true);
     setStatus({ type: '', message: '' });
-
+  
     const playlistId = playlistUrl.split('/').pop()?.split('?')[0];
+    let allTracks: Track[] = [];
+    let nextUrl: string | null = `https://api.spotify.com/v1/playlists/${playlistId}/tracks`;
+  
     try {
-      const response = await axios.get(`https://api.spotify.com/v1/playlists/${playlistId}/tracks`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      const fetchedTracks = response.data.items.map((item: any, index: number) => ({
-        id: index + 1,
-        name: item.track.name,
-        artist: item.track.artists[0].name,
-        album: item.track.album.name,
-        albumArt: item.track.album.images[0]?.url || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=150&h=150&q=80',
-        duration: `${Math.floor(item.track.duration_ms / 60000)}:${((item.track.duration_ms % 60000) / 1000).toFixed(0).padStart(2, '0')}`,
-        downloading: false,
-      }));
-
-      setTracks(fetchedTracks);
-      setStatus({ type: 'success', message: `Successfully fetched ${fetchedTracks.length} tracks` });
+      while (nextUrl) {
+        const response = await axios.get(nextUrl, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+  
+        const fetchedTracks = response.data.items.map((item: any, index: number) => ({
+          id: allTracks.length + index + 1,
+          name: item.track.name,
+          artist: item.track.artists[0].name,
+          album: item.track.album.name,
+          albumArt: item.track.album.images[0]?.url || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=150&h=150&q=80',
+          duration: `${Math.floor(item.track.duration_ms / 60000)}:${((item.track.duration_ms % 60000) / 1000).toFixed(0).padStart(2, '0')}`,
+          downloading: false,
+        }));
+  
+        allTracks = [...allTracks, ...fetchedTracks];
+        nextUrl = response.data.next; // If there's a next page, this will be a URL; otherwise, null
+      }
+  
+      setTracks(allTracks);
+      setStatus({ type: 'success', message: `Successfully fetched ${allTracks.length} tracks` });
     } catch (err: any) {
       const errorMessage = err.response?.data?.error?.message || 'Failed to fetch playlist. Check URL or try again.';
       setStatus({ type: 'error', message: errorMessage });
@@ -176,25 +223,70 @@ const getToken = async (code: string) => {
     }
   };
 
-  // Simulate download (placeholder for backend)
-  const handleDownload = async (trackId: number) => {
-    setTracks(tracks.map(track => 
-      track.id === trackId ? { ...track, downloading: true } : track
-    ));
 
-    await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate delay
-
-    setTracks(tracks.map(track => 
-      track.id === trackId ? { ...track, downloading: false } : track
-    ));
+  // Trigger a file download in the browser
+  const triggerDownload = (url: string, filename: string) => {
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
-  const handleDownloadAll = async () => {
-    setDownloadingAll(true);
-    for (const track of tracks) {
-      await handleDownload(track.id);
+  // Download a single track
+  const handleDownload = async (trackId: number) => {
+    const track = tracks.find(t => t.id === trackId);
+    if (!track) return;
+
+    setTracks(tracks.map(t => 
+      t.id === trackId ? { ...t, downloading: true } : t
+    ));
+
+    try {
+      const query = `${track.name} ${track.artist}`;
+      const response = await axios.post('/api/download', { query });
+      const { url } = response.data;
+
+      // Trigger the download
+      triggerDownload(url, `${track.name} - ${track.artist}.mp3`);
+    } catch (err: any) {
+      const errorMessage = err.response?.data?.error || 'Failed to download track';
+      const errorDetails = err.response?.data?.details || err.message;
+      setStatus({ type: 'error', message: `${errorMessage}: ${errorDetails}` });
+      console.error('Download track error:', err);
+    } finally {
+      setTracks(tracks.map(t => 
+        t.id === trackId ? { ...t, downloading: false } : t
+      ));
     }
-    setDownloadingAll(false);
+  };
+
+  // Download all tracks as a ZIP file
+  const handleDownloadAll = async () => {
+    if (tracks.length === 0) {
+      setStatus({ type: 'error', message: 'No tracks to download' });
+      return;
+    }
+
+    setDownloadingAll(true);
+    setStatus({ type: 'info', message: 'Preparing ZIP file... This may take a while.' });
+
+    try {
+      const response = await axios.post('/api/download-all', { tracks });
+      const { url } = response.data;
+
+      // Trigger the ZIP file download
+      triggerDownload(url, 'playlist.zip');
+      setStatus({ type: 'success', message: 'ZIP file downloaded successfully' });
+    } catch (err: any) {
+      const errorMessage = err.response?.data?.error || 'Failed to create ZIP file';
+      const errorDetails = err.response?.data?.details || err.message;
+      setStatus({ type: 'error', message: `${errorMessage}: ${errorDetails}` });
+      console.error('Download all tracks error:', err);
+    } finally {
+      setDownloadingAll(false);
+    }
   };
 
   return (
@@ -258,7 +350,7 @@ const getToken = async (code: string) => {
               {/* Status Message */}
               {status.message && (
                 <div className={`mt-4 text-center ${
-                  status.type === 'error' ? 'text-red-500' : 'text-green-500'
+                  status.type === 'error' ? 'text-red-500' : status.type === 'info' ? 'text-blue-500' : 'text-green-500'
                 }`}>
                   {status.message}
                 </div>

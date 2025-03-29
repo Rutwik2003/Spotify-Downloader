@@ -68,7 +68,6 @@ function App() {
   const [token, setToken] = useState<string | null>(null);
 
   const clientId = import.meta.env.VITE_SPOTIFY_CLIENT_ID;
-  const clientSecret = import.meta.env.VITE_SPOTIFY_CLIENT_SECRET;
   const redirectUri = import.meta.env.VITE_SPOTIFY_REDIRECT_URI;
   const scope = 'playlist-read-private';
 
@@ -89,19 +88,7 @@ function App() {
 
   const getToken = async (code: string) => {
     try {
-      const response = await axios.post(
-        'https://accounts.spotify.com/api/token',
-        new URLSearchParams({
-          grant_type: 'authorization_code',
-          code,
-          redirect_uri: redirectUri,
-          client_id: clientId,
-          client_secret: clientSecret,
-        }),
-        {
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        }
-      );
+      const response = await axios.post('/api/token', { code, redirectUri });
       setToken(response.data.access_token);
       setIsLoggedIn(true);
       window.history.pushState({}, document.title, '/'); // Clean URL

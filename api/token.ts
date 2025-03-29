@@ -1,10 +1,19 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import axios from 'axios';
 
-// Use ES module export syntax
 const handler = async (req: VercelRequest, res: VercelResponse) => {
-  // Log the request body for debugging
-  console.log('Request body:', req.body);
+  // Log the entire request for debugging
+  console.log('Incoming request:', {
+    method: req.method,
+    body: req.body,
+    headers: req.headers,
+  });
+
+  // Ensure the request method is POST
+  if (req.method !== 'POST') {
+    console.error('Invalid request method:', req.method);
+    return res.status(405).json({ error: 'Method Not Allowed' });
+  }
 
   const { code, redirectUri } = req.body;
 
@@ -14,29 +23,42 @@ const handler = async (req: VercelRequest, res: VercelResponse) => {
   }
 
   // Log environment variables for debugging
-  console.log('SPOTIFY_CLIENT_ID:', process.env.SPOTIFY_CLIENT_ID);
-  console.log('SPOTIFY_CLIENT_SECRET:', process.env.SPOTIFY_CLIENT_SECRET);
-  console.log('SPOTIFY_REDIRECT_URI:', process.env.SPOTIFY_REDIRECT_URI);
+  const clientId = process.env.SPOTIFY_CLIENT_ID;
+  const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
+  const serverRedirectUri = process.env.SPOTIFY_REDIRECT_URI;
 
-  if (!process.env.SPOTIFY_CLIENT_ID || !process.env.SPOTIFY_CLIENT_SECRET || !process.env.SPOTIFY_REDIRECT_URI) {
+  console.log('Environment variables:', {
+    SPOTIFY_CLIENT_ID: clientId,
+    SPOTIFY_CLIENT_SECRET: clientSecret ? '[REDACTED]' : undefined, // Avoid logging sensitive data
+    SPOTIFY_REDIRECT_URI: serverRedirectUri,
+  });
+
+  if (!clientId || !clientSecret || !serverRedirectUri) {
     console.error('Missing environment variables:', {
-      clientId: process.env.SPOTIFY_CLIENT_ID,
-      clientSecret: process.env.SPOTIFY_CLIENT_SECRET,
-      redirectUri: process.env.SPOTIFY_REDIRECT_URI,
+      clientId,
+      clientSecret: clientSecret ? '[REDACTED]' : undefined,
+      redirectUri: serverRedirectUri,
     });
     return res.status(500).json({ error: 'Server configuration error: Missing environment variables' });
   }
 
+  // Log the request parameters being sent to Spotify
+  const requestParams = {
+    grant_type: 'authorization_code',
+    code,
+    redirect_uri: redirectUri,
+    client_id: clientId,
+    client_secret: clientSecret,
+  };
+  console.log('Sending token exchange request to Spotify with params:', {
+    ...requestParams,
+    client_secret: '[REDACTED]', // Avoid logging sensitive data
+  });
+
   try {
     const response = await axios.post(
       'https://accounts.spotify.com/api/token',
-      new URLSearchParams({
-        grant_type: 'authorization_code',
-        code,
-        redirect_uri: redirectUri,
-        client_id: process.env.SPOTIFY_CLIENT_ID,
-        client_secret: process.env.SPOTIFY_CLIENT_SECRET,
-      }),
+      new URLSearchParams(requestParams),
       {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       }
@@ -45,10 +67,17 @@ const handler = async (req: VercelRequest, res: VercelResponse) => {
     console.log('Token exchange successful:', response.data);
     return res.status(200).json({ access_token: response.data.access_token });
   } catch (error: any) {
-    console.error('Token exchange failed:', error.message, error.response?.data);
-    return res.status(500).json({ error: 'Failed to exchange token', details: error.response?.data || error.message });
+    console.error('Token exchange failed:', {
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status,
+      headers: error.response?.headers,
+    });
+    return res.status(500).json({
+      error: 'Failed to exchange token',
+      details: error.response?.data || error.message,
+    });
   }
 };
 
-// Export as an ES module
 export default handler;

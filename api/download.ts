@@ -1,5 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import axios from 'axios';
+import ytDlp from 'yt-dlp-exec';
+import { promises as fs } from 'fs';
+import { join } from 'path';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
@@ -13,15 +15,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    // Hypothetical third-party service to download the track
-    // Replace with a real service or library (e.g., youtube-dl, spotdl)
-    const response = await axios.get(`https://music-downloader-api.com/download?q=${encodeURIComponent(query)}`, {
-      responseType: 'arraybuffer', // Get the MP3 as a binary buffer
-    });
+    // Temporary file path to store the downloaded MP3
+    const tempDir = '/tmp'; // Vercel provides a writable /tmp directory
+    const filename = `${query.replace(/[^a-zA-Z0-9]/g, '_')}.mp3`;
+    const filePath = join(tempDir, filename);
 
-    // In a real implementation, you'd save the file to a temporary storage (e.g., Vercel Blob Storage)
+    // Use yt-dlp to search for the track on YouTube and download it as MP3
+    await ytDlp.execPromise([
+      `ytsearch1:${query}`, // Search for the track on YouTube
+      '-x', // Extract audio
+      '--audio-format', 'mp3', // Convert to MP3
+      '-o', filePath, // Output file path
+      '--no-playlist', // Ensure we only download one result
+    ]);
+
+    // Read the file into a buffer
+    const fileBuffer = await fs.readFile(filePath);
+
+    // Save the file to Vercel Blob Storage (or another storage solution)
     // For simplicity, we'll return a hypothetical URL
-    const downloadUrl = `https://music-downloader-api.com/files/${encodeURIComponent(query)}.mp3`;
+    // In a real app, you'd upload this to Vercel Blob Storage or S3
+    const downloadUrl = `https://your-storage-service.com/files/${filename}`; // Replace with real storage URL
+
+    // Clean up the temporary file
+    await fs.unlink(filePath);
 
     return res.status(200).json({ url: downloadUrl });
   } catch (error: any) {

@@ -1,21 +1,34 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import axios from 'axios';
+import ytDlp from 'yt-dlp-exec';
 import AdmZip from 'adm-zip';
 import { put } from '@vercel/blob';
+import { promises as fs } from 'fs';
+import { join } from 'path';
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 const downloadTrackWithRetry = async (query: string, retries = 3, backoff = 1000) => {
+  const tempDir = '/tmp';
+  const filename = `${query.replace(/[^a-zA-Z0-9]/g, '_')}.mp3`;
+  const filePath = join(tempDir, filename);
+
   for (let i = 0; i < retries; i++) {
     try {
-      const response = await axios.get(`https://music-downloader-api.com/download?q=${encodeURIComponent(query)}`, {
-        responseType: 'arraybuffer',
-      });
-      return response.data;
+      await ytDlp.execPromise([
+        `ytsearch1:${query}`,
+        '-x',
+        '--audio-format', 'mp3',
+        '-o', filePath,
+        '--no-playlist',
+      ]);
+
+      const fileBuffer = await fs.readFile(filePath);
+      await fs.unlink(filePath); // Clean up
+      return fileBuffer;
     } catch (error: any) {
-      if (error.response?.status === 429 && i < retries - 1) {
-        const waitTime = backoff * Math.pow(2, i); // Exponential backoff
-        console.log(`Rate limit hit, retrying after ${waitTime}ms...`);
+      if (i < retries - 1) {
+        const waitTime = backoff * Math.pow(2, i);
+        console.log(`Retry ${i + 1}/${retries} after ${waitTime}ms...`);
         await delay(waitTime);
         continue;
       }
@@ -39,7 +52,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const zip = new AdmZip();
 
-    // Download each track with a delay to avoid rate limits
+    // Download each track and add it to the ZIP file
     for (let i = 0; i < tracks.length; i++) {
       const track = tracks[i];
       const query = `${track.name} ${track.artist}`;
@@ -47,11 +60,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       const trackData = await downloadTrackWithRetry(query);
       const filename = `${track.name} - ${track.artist}.mp3`.replace(/[<>:"/\\|?*]+/g, '_');
-      zip.addFile(filename, Buffer.from(trackData));
+      zip.addFile(filename, trackData);
 
-      // Add a delay between requests to avoid rate limits
+      // Add a delay to avoid rate limits
       if (i < tracks.length - 1) {
-        await delay(1000); // 1 second delay between requests
+        await delay(1000);
       }
     }
 

@@ -67,39 +67,62 @@ function App() {
   const [downloadingAll, setDownloadingAll] = useState(false);
   const [token, setToken] = useState<string | null>(null);
 
+  // Load environment variables
   const clientId = import.meta.env.VITE_SPOTIFY_CLIENT_ID;
   const redirectUri = import.meta.env.VITE_SPOTIFY_REDIRECT_URI;
   const scope = 'playlist-read-private';
 
+  // Log environment variables for debugging
+  console.log('App.tsx - clientId:', clientId);
+  console.log('App.tsx - redirectUri:', redirectUri);
+
+  // Validate environment variables
+  useEffect(() => {
+    if (!clientId || !redirectUri) {
+      setStatus({
+        type: 'error',
+        message: 'Missing Spotify configuration. Please check environment variables.',
+      });
+    }
+  }, [clientId, redirectUri]);
+
   // Handle Spotify OAuth login
   const handleLogin = () => {
-    const authUrl = `https://accounts.spotify.com/authorize?client_id=${clientId}&response_type=code&redirect_uri=${redirectUri}&scope=${scope}`;
+    if (!clientId || !redirectUri) {
+      setStatus({
+        type: 'error',
+        message: 'Cannot login: Missing client ID or redirect URI.',
+      });
+      return;
+    }
+
+    const authUrl = `https://accounts.spotify.com/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scope}`;
     window.location.href = authUrl;
   };
 
-  // const handleLogin = () => {
-  //   const authUrl = `https://accounts.spotify.com/authorize?client_id=${import.meta.env.VITE_SPOTIFY_CLIENT_ID}&response_type=code&redirect_uri=${encodeURIComponent(import.meta.env.VITE_SPOTIFY_REDIRECT_URI)}&scope=${scope}`;
-  //   window.location.href = authUrl;
-  // };
-  
   // Extract code from URL and get token
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const code = urlParams.get('code');
+
     if (code && !token) {
       getToken(code);
     }
-  }, [token]);
+  }, []); // Run only once on mount to prevent code reuse
 
   const getToken = async (code: string) => {
     try {
+      console.log('Attempting token exchange with code:', code);
       const response = await axios.post('/api/token', { code, redirectUri });
       setToken(response.data.access_token);
       setIsLoggedIn(true);
+      setStatus({ type: 'success', message: 'Successfully authenticated with Spotify' });
       window.history.pushState({}, document.title, '/'); // Clean URL
-    } catch (err) {
-      setStatus({ type: 'error', message: 'Failed to authenticate with Spotify' });
-      console.error(err);
+    } catch (err: any) {
+      const errorMessage = err.response?.data?.error || 'Failed to authenticate with Spotify';
+      const errorDetails = err.response?.data?.details || err.message;
+      setStatus({ type: 'error', message: `${errorMessage}: ${errorDetails}` });
+      console.error('Token exchange error:', err);
     }
   };
 
@@ -135,9 +158,10 @@ function App() {
 
       setTracks(fetchedTracks);
       setStatus({ type: 'success', message: `Successfully fetched ${fetchedTracks.length} tracks` });
-    } catch (err) {
-      setStatus({ type: 'error', message: 'Failed to fetch playlist. Check URL or try again.' });
-      console.error(err);
+    } catch (err: any) {
+      const errorMessage = err.response?.data?.error?.message || 'Failed to fetch playlist. Check URL or try again.';
+      setStatus({ type: 'error', message: errorMessage });
+      console.error('Fetch playlist error:', err);
     } finally {
       setIsLoading(false);
     }

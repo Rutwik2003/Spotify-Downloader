@@ -110,21 +110,30 @@ function App() {
     }
   }, []); // Run only once on mount to prevent code reuse
 
-  const getToken = async (code: string) => {
-    try {
-      console.log('Sending token exchange request with:', { code, redirectUri });
-      const response = await axios.post('/api/token', { code, redirectUri });
-      setToken(response.data.access_token);
-      setIsLoggedIn(true);
-      setStatus({ type: 'success', message: 'Successfully authenticated with Spotify' });
-      window.history.pushState({}, document.title, '/'); // Clean URL
-    } catch (err: any) {
-      const errorMessage = err.response?.data?.error || 'Failed to authenticate with Spotify';
-      const errorDetails = err.response?.data?.details || err.message;
+const getToken = async (code: string) => {
+  try {
+    console.log('Sending token exchange request with:', { code, redirectUri });
+    const response = await axios.post('/api/token', { code, redirectUri });
+    setToken(response.data.access_token);
+    setIsLoggedIn(true);
+    setStatus({ type: 'success', message: 'Successfully authenticated with Spotify' });
+    window.history.pushState({}, document.title, '/'); // Clean URL
+  } catch (err: any) {
+    const errorMessage = err.response?.data?.error || 'Failed to authenticate with Spotify';
+    const errorDetails = err.response?.data?.details || err.message;
+    // Check for invalid_grant error (expired or invalid code)
+    if (errorDetails?.error === 'invalid_grant') {
+      setStatus({
+        type: 'error',
+        message: 'Authentication code expired or invalid. Please log in again.',
+      });
+      setIsLoggedIn(false); // Force re-authentication
+    } else {
       setStatus({ type: 'error', message: `${errorMessage}: ${errorDetails}` });
-      console.error('Token exchange error:', err);
     }
-  };
+    console.error('Token exchange error:', err);
+  }
+};
 
   // Fetch playlist tracks from Spotify
   const handleFetchPlaylist = async () => {

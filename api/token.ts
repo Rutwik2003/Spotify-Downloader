@@ -1,7 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import axios from 'axios';
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+// Use ES module export syntax
+const handler = async (req: VercelRequest, res: VercelResponse) => {
   // Log the request body for debugging
   console.log('Request body:', req.body);
 
@@ -32,7 +33,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       new URLSearchParams({
         grant_type: 'authorization_code',
         code,
-        redirect_uri: redirectUri, // Use the redirectUri sent from the client
+        redirect_uri: redirectUri,
         client_id: process.env.SPOTIFY_CLIENT_ID,
         client_secret: process.env.SPOTIFY_CLIENT_SECRET,
       }),
@@ -42,9 +43,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     );
 
     console.log('Token exchange successful:', response.data);
-    res.status(200).json({ access_token: response.data.access_token });
+    return res.status(200).json({ access_token: response.data.access_token });
   } catch (error: any) {
     console.error('Token exchange failed:', error.message, error.response?.data);
-    res.status(500).json({ error: 'Failed to exchange token', details: error.response?.data || error.message });
+    return res.status(500).json({ error: 'Failed to exchange token', details: error.response?.data || error.message });
   }
-}
+};
+
+// Export as an ES module
+export default handler;

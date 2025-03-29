@@ -112,7 +112,7 @@ function App() {
 
   const getToken = async (code: string) => {
     try {
-      console.log('Attempting token exchange with code:', code);
+      console.log('Sending token exchange request with:', { code, redirectUri });
       const response = await axios.post('/api/token', { code, redirectUri });
       setToken(response.data.access_token);
       setIsLoggedIn(true);
